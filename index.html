@@ -1,0 +1,666 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>The Operating System</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#121214">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Oswald:wght@500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#121214;
+    --surface:#1B1B1F;
+    --surface-2:#232328;
+    --border:#2E2E34;
+    --text:#EEEEE6;
+    --muted:#8C8C93;
+    --accent:#FF5E3A;
+    --accent-dim:rgba(255,94,58,0.14);
+    --success:#BFE94B;
+    --success-dim:rgba(191,233,75,0.14);
+    --warn:#FFC857;
+    --warn-dim:rgba(255,200,87,0.12);
+    --sun:#7C8CFF;
+    --sun-dim:rgba(124,140,255,0.14);
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    background:var(--bg);
+    color:var(--text);
+    font-family:'Inter',sans-serif;
+    -webkit-font-smoothing:antialiased;
+  }
+  .wrap{
+    max-width:680px;
+    margin:0 auto;
+    padding:28px 18px 60px;
+  }
+  .eyebrow{
+    font-family:'JetBrains Mono',monospace;
+    font-size:11px;
+    letter-spacing:0.18em;
+    text-transform:uppercase;
+    color:var(--muted);
+    margin-bottom:6px;
+  }
+  h1{
+    font-family:'Oswald',sans-serif;
+    font-weight:700;
+    text-transform:uppercase;
+    letter-spacing:0.01em;
+    font-size:30px;
+    margin:0 0 4px;
+  }
+  .dateline{
+    font-family:'JetBrains Mono',monospace;
+    font-size:12.5px;
+    color:var(--muted);
+    margin-bottom:22px;
+  }
+
+  /* tally strip */
+  .tally{
+    display:flex;
+    gap:10px;
+    margin-bottom:24px;
+    flex-wrap:wrap;
+  }
+  .tally-item{
+    background:var(--surface);
+    border:1px solid var(--border);
+    border-radius:10px;
+    padding:10px 14px;
+    flex:1;
+    min-width:130px;
+  }
+  .tally-num{
+    font-family:'JetBrains Mono',monospace;
+    font-size:20px;
+    font-weight:600;
+    color:var(--accent);
+  }
+  .tally-label{
+    font-size:11px;
+    color:var(--muted);
+    margin-top:2px;
+  }
+
+  /* day strip - weight plates */
+  .daystrip{
+    display:flex;
+    gap:10px;
+    margin-bottom:22px;
+    overflow-x:auto;
+    padding-bottom:4px;
+  }
+  .plate{
+    flex:0 0 auto;
+    width:54px;
+    height:54px;
+    border-radius:50%;
+    position:relative;
+    cursor:pointer;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    background:conic-gradient(var(--success) calc(var(--pct,0)*1%), var(--surface-2) 0);
+    border:1px solid var(--border);
+  }
+  .plate.is-sun{
+    background:conic-gradient(var(--sun) calc(var(--pct,0)*1%), var(--surface-2) 0);
+  }
+  .plate-inner{
+    width:42px;
+    height:42px;
+    border-radius:50%;
+    background:var(--surface);
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    justify-content:center;
+    font-family:'JetBrains Mono',monospace;
+  }
+  .plate-day{
+    font-size:11px;
+    font-weight:600;
+    letter-spacing:0.03em;
+  }
+  .plate-date{
+    font-size:9px;
+    color:var(--muted);
+  }
+  .plate.active .plate-inner{
+    box-shadow:inset 0 0 0 2px var(--accent);
+  }
+  .plate.is-sun.active .plate-inner{
+    box-shadow:inset 0 0 0 2px var(--sun);
+  }
+  .plate.is-today::after{
+    content:'';
+    position:absolute;
+    bottom:-6px;
+    left:50%;
+    transform:translateX(-50%);
+    width:5px;
+    height:5px;
+    border-radius:50%;
+    background:var(--accent);
+  }
+
+  /* day panel */
+  .panel-head{
+    display:flex;
+    justify-content:space-between;
+    align-items:baseline;
+    margin-bottom:14px;
+  }
+  .panel-title{
+    font-family:'Oswald',sans-serif;
+    font-weight:600;
+    font-size:18px;
+    text-transform:uppercase;
+  }
+  .panel-sub{
+    font-family:'JetBrains Mono',monospace;
+    font-size:11px;
+    color:var(--muted);
+  }
+
+  .block{
+    background:var(--surface);
+    border:1px solid var(--border);
+    border-left:3px solid var(--border);
+    border-radius:8px;
+    padding:12px 14px;
+    margin-bottom:8px;
+  }
+  .block.type-primary{border-left-color:var(--accent);}
+  .block.type-gap{border-left-color:var(--warn);}
+  .block.type-maintenance{border-left-color:var(--sun);}
+  .block-row{
+    display:flex;
+    align-items:flex-start;
+    gap:12px;
+  }
+  .block-time{
+    font-family:'JetBrains Mono',monospace;
+    font-size:11px;
+    color:var(--muted);
+    min-width:92px;
+    padding-top:2px;
+  }
+  .block-main{flex:1;}
+  .block-label{
+    font-size:14px;
+    line-height:1.4;
+  }
+  .block.checked .block-label{
+    color:var(--muted);
+    text-decoration:line-through;
+    text-decoration-color:var(--border);
+  }
+  .tag{
+    display:inline-block;
+    font-family:'JetBrains Mono',monospace;
+    font-size:9.5px;
+    text-transform:uppercase;
+    letter-spacing:0.06em;
+    padding:1px 6px;
+    border-radius:4px;
+    margin-bottom:4px;
+  }
+  .tag-primary{background:var(--accent-dim);color:var(--accent);}
+  .tag-gap{background:var(--warn-dim);color:var(--warn);}
+  .tag-maintenance{background:var(--sun-dim);color:var(--sun);}
+
+  .checkbox{
+    width:22px;
+    height:22px;
+    border-radius:6px;
+    border:1.5px solid var(--border);
+    background:var(--surface-2);
+    cursor:pointer;
+    flex:0 0 auto;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    margin-top:1px;
+  }
+  .checkbox.checked{
+    background:var(--success);
+    border-color:var(--success);
+  }
+  .checkbox.checked::after{
+    content:'✓';
+    color:#14150F;
+    font-size:13px;
+    font-weight:700;
+  }
+  .note-toggle{
+    background:none;
+    border:none;
+    color:var(--muted);
+    font-family:'JetBrains Mono',monospace;
+    font-size:11px;
+    cursor:pointer;
+    padding:4px 0 0;
+    text-decoration:underline;
+    text-decoration-style:dotted;
+  }
+  .note-area{
+    width:100%;
+    background:var(--surface-2);
+    border:1px solid var(--border);
+    border-radius:6px;
+    color:var(--text);
+    font-family:'Inter',sans-serif;
+    font-size:13px;
+    padding:8px 10px;
+    margin-top:8px;
+    resize:vertical;
+    min-height:50px;
+  }
+  .note-area:focus{outline:none;border-color:var(--muted);}
+
+  .daynote-wrap{margin-top:18px;}
+  .daynote-label{
+    font-family:'JetBrains Mono',monospace;
+    font-size:11px;
+    color:var(--muted);
+    text-transform:uppercase;
+    letter-spacing:0.06em;
+    margin-bottom:6px;
+  }
+  textarea.daynote{
+    width:100%;
+    min-height:70px;
+    background:var(--surface);
+    border:1px solid var(--border);
+    border-radius:8px;
+    color:var(--text);
+    font-family:'Inter',sans-serif;
+    font-size:13.5px;
+    padding:10px 12px;
+    resize:vertical;
+  }
+  textarea.daynote:focus{outline:none;border-color:var(--muted);}
+
+  /* sunday review */
+  .review-grid{
+    display:grid;
+    grid-template-columns:repeat(4,1fr);
+    gap:8px;
+    margin-bottom:20px;
+  }
+  .review-stat{
+    background:var(--surface);
+    border:1px solid var(--border);
+    border-radius:8px;
+    padding:12px 8px;
+    text-align:center;
+  }
+  .review-stat .num{
+    font-family:'JetBrains Mono',monospace;
+    font-size:18px;
+    color:var(--sun);
+    font-weight:600;
+  }
+  .review-stat .lbl{
+    font-size:10px;
+    color:var(--muted);
+    margin-top:2px;
+  }
+  .review-field{margin-bottom:16px;}
+  .review-field label{
+    display:block;
+    font-family:'JetBrains Mono',monospace;
+    font-size:11px;
+    color:var(--muted);
+    text-transform:uppercase;
+    letter-spacing:0.05em;
+    margin-bottom:6px;
+  }
+  .review-field textarea{
+    width:100%;
+    min-height:64px;
+    background:var(--surface);
+    border:1px solid var(--border);
+    border-radius:8px;
+    color:var(--text);
+    font-family:'Inter',sans-serif;
+    font-size:13.5px;
+    padding:10px 12px;
+    resize:vertical;
+  }
+  .review-field textarea:focus{outline:none;border-color:var(--sun);}
+
+  .savetick{
+    font-family:'JetBrains Mono',monospace;
+    font-size:10.5px;
+    color:var(--success);
+    height:14px;
+    margin-top:6px;
+    opacity:0;
+    transition:opacity 0.3s;
+  }
+  .savetick.show{opacity:1;}
+
+  .loading{
+    color:var(--muted);
+    font-family:'JetBrains Mono',monospace;
+    font-size:12px;
+    padding:40px 0;
+    text-align:center;
+  }
+</style>
+</head>
+<body>
+<div class="wrap" id="app">
+  <div class="loading">loading your week…</div>
+</div>
+
+<script>
+// Local storage shim — mirrors the storage interface so the rest of
+// the app logic stays the same, but actually persists in this browser.
+const storage = {
+  async get(key){
+    const v = localStorage.getItem(key);
+    if(v===null) return null;
+    return {key, value:v};
+  },
+  async set(key, value){
+    localStorage.setItem(key, value);
+    return {key, value};
+  }
+};
+if('serviceWorker' in navigator){
+  window.addEventListener('load', ()=>{
+    navigator.serviceWorker.register('sw.js').catch(()=>{});
+  });
+}
+
+const BLOCKS = [
+  {id:'wake', time:'5:00 AM', label:'Wake up — phone stays down for the first 10 min', type:'fixed'},
+  {id:'gym', time:'6:00–7:40 AM', label:'Gym session', type:'fixed'},
+  {id:'morninggap', time:'7:40–8:20 AM', label:'Shower & breakfast — scroll-trap #1', type:'gap'},
+  {id:'commrep', time:'8:20 AM–7:00 PM', label:'One deliberate communication / sales rep at work', type:'maintenance'},
+  {id:'dinner', time:'7:00–7:30 PM', label:'Dinner, fully off — no guilt, no laptop', type:'fixed'},
+  {id:'primary', time:'7:30–9:00 PM', label:'DaVinci Resolve + Instagram page work', type:'primary'},
+  {id:'stockcheck', time:'9:00–9:30 PM', label:'15-min Nifty glance + set up tomorrow', type:'maintenance'},
+  {id:'sleep', time:'9:30 PM', label:'Lights out', type:'fixed'},
+];
+const DAY_NAMES = ['MON','TUE','WED','THU','FRI','SAT'];
+
+function pad(n){return n<10?'0'+n:''+n;}
+function fmtDate(d){return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate());}
+function fmtShort(d){return pad(d.getDate())+'/'+pad(d.getMonth()+1);}
+
+function getMonday(d){
+  d = new Date(d);
+  const day = d.getDay();
+  const diff = d.getDate() - day + (day===0 ? -6 : 1);
+  return new Date(d.getFullYear(), d.getMonth(), diff);
+}
+
+const today = new Date();
+const monday = getMonday(today);
+const weekDates = [];
+for(let i=0;i<6;i++){
+  const d = new Date(monday);
+  d.setDate(monday.getDate()+i);
+  weekDates.push(d);
+}
+const sundayDate = new Date(monday);
+sundayDate.setDate(monday.getDate()+6);
+const todayStr = fmtDate(today);
+const mondayKey = fmtDate(monday);
+
+let weekData = {}; // dateStr -> {checks:{}, notes:{}, dayNote:''}
+let reviewData = {igNotes:'', reflection:'', nextFocus:''};
+let selectedIndex = weekDates.findIndex(d => fmtDate(d) === todayStr);
+if(selectedIndex === -1) selectedIndex = (todayStr === fmtDate(sundayDate)) ? 6 : 0;
+
+async function loadDay(dateStr){
+  try{
+    const res = await storage.get('day:'+dateStr);
+    if(res && res.value){ return JSON.parse(res.value); }
+  }catch(e){}
+  return {checks:{}, notes:{}, dayNote:''};
+}
+async function saveDay(dateStr, data){
+  try{ await storage.set('day:'+dateStr, JSON.stringify(data)); }catch(e){}
+}
+async function loadWeekReview(key){
+  try{
+    const res = await storage.get('week:'+key);
+    if(res && res.value){ return JSON.parse(res.value); }
+  }catch(e){}
+  return {igNotes:'', reflection:'', nextFocus:''};
+}
+async function saveWeekReview(key, data){
+  try{ await storage.set('week:'+key, JSON.stringify(data)); }catch(e){}
+}
+
+function dayCompletion(dateStr){
+  const d = weekData[dateStr];
+  if(!d) return 0;
+  const checked = BLOCKS.filter(b => d.checks && d.checks[b.id]).length;
+  return Math.round((checked/BLOCKS.length)*100);
+}
+
+function tallyCount(blockId){
+  let n = 0;
+  weekDates.forEach(d=>{
+    const ds = fmtDate(d);
+    const data = weekData[ds];
+    if(data && data.checks && data.checks[blockId]) n++;
+  });
+  return n;
+}
+
+async function init(){
+  const loads = weekDates.map(d => loadDay(fmtDate(d)));
+  const results = await Promise.all(loads);
+  weekDates.forEach((d,i)=>{ weekData[fmtDate(d)] = results[i]; });
+  reviewData = await loadWeekReview(mondayKey);
+  render();
+}
+
+function render(){
+  const app = document.getElementById('app');
+  app.innerHTML = '';
+
+  // header
+  const header = document.createElement('div');
+  header.innerHTML = `
+    <div class="eyebrow">the operating system</div>
+    <h1>Mon–Sat Execution</h1>
+    <div class="dateline">Week of ${fmtShort(monday)} – ${fmtShort(sundayDate)}</div>
+  `;
+  app.appendChild(header);
+
+  // tally strip
+  const tally = document.createElement('div');
+  tally.className = 'tally';
+  const tallyDefs = [
+    {id:'primary', label:'DaVinci + IG block'},
+    {id:'gym', label:'Gym'},
+    {id:'stockcheck', label:'Market glance'},
+    {id:'commrep', label:'Comms rep'},
+  ];
+  tallyDefs.forEach(t=>{
+    const item = document.createElement('div');
+    item.className = 'tally-item';
+    item.innerHTML = `<div class="tally-num">${tallyCount(t.id)}/6</div><div class="tally-label">${t.label}</div>`;
+    tally.appendChild(item);
+  });
+  app.appendChild(tally);
+
+  // day strip
+  const strip = document.createElement('div');
+  strip.className = 'daystrip';
+  weekDates.forEach((d,i)=>{
+    const ds = fmtDate(d);
+    const pct = dayCompletion(ds);
+    const plate = document.createElement('div');
+    plate.className = 'plate' + (i===selectedIndex?' active':'') + (ds===todayStr?' is-today':'');
+    plate.style.setProperty('--pct', pct);
+    plate.innerHTML = `<div class="plate-inner"><div class="plate-day">${DAY_NAMES[i]}</div><div class="plate-date">${fmtShort(d)}</div></div>`;
+    plate.onclick = ()=>{ selectedIndex = i; render(); };
+    strip.appendChild(plate);
+  });
+  // sunday plate
+  const sunPlate = document.createElement('div');
+  const sunPct = Math.round((tallyDefs.reduce((a,t)=>a+tallyCount(t.id),0))/(tallyDefs.length*6)*100);
+  sunPlate.className = 'plate is-sun' + (selectedIndex===6?' active':'') + (fmtDate(sundayDate)===todayStr?' is-today':'');
+  sunPlate.style.setProperty('--pct', sunPct);
+  sunPlate.innerHTML = `<div class="plate-inner"><div class="plate-day">SUN</div><div class="plate-date">${fmtShort(sundayDate)}</div></div>`;
+  sunPlate.onclick = ()=>{ selectedIndex = 6; render(); };
+  strip.appendChild(sunPlate);
+  app.appendChild(strip);
+
+  if(selectedIndex < 6){
+    renderDayPanel(app, weekDates[selectedIndex]);
+  } else {
+    renderReviewPanel(app);
+  }
+}
+
+function renderDayPanel(app, date){
+  const ds = fmtDate(date);
+  const data = weekData[ds] = weekData[ds] || {checks:{}, notes:{}, dayNote:''};
+
+  const head = document.createElement('div');
+  head.className = 'panel-head';
+  head.innerHTML = `<div class="panel-title">${DAY_NAMES[weekDates.findIndex(d=>fmtDate(d)===ds)]} · ${fmtShort(date)}</div><div class="panel-sub">${dayCompletion(ds)}% locked in</div>`;
+  app.appendChild(head);
+
+  BLOCKS.forEach(b=>{
+    const block = document.createElement('div');
+    block.className = 'block type-'+b.type + (data.checks[b.id]?' checked':'');
+
+    const tagHtml = b.type==='primary' ? '<span class="tag tag-primary">priority</span><br>'
+      : b.type==='gap' ? '<span class="tag tag-gap">danger zone</span><br>'
+      : b.type==='maintenance' ? '<span class="tag tag-maintenance">maintenance</span><br>'
+      : '';
+
+    const row = document.createElement('div');
+    row.className = 'block-row';
+    row.innerHTML = `
+      <div class="block-time">${b.time}</div>
+      <div class="checkbox ${data.checks[b.id]?'checked':''}"></div>
+      <div class="block-main">
+        ${tagHtml}
+        <div class="block-label">${b.label}</div>
+        <button class="note-toggle">${data.notes[b.id] ? 'edit note' : '+ note'}</button>
+        <div class="note-holder"></div>
+      </div>
+    `;
+    block.appendChild(row);
+
+    const checkbox = row.querySelector('.checkbox');
+    checkbox.onclick = async ()=>{
+      data.checks[b.id] = !data.checks[b.id];
+      await saveDay(ds, data);
+      render();
+    };
+
+    const noteToggle = row.querySelector('.note-toggle');
+    const noteHolder = row.querySelector('.note-holder');
+    let noteOpen = !!data.notes[b.id];
+    function paintNote(){
+      noteHolder.innerHTML = '';
+      if(!noteOpen) return;
+      const ta = document.createElement('textarea');
+      ta.className = 'note-area';
+      ta.placeholder = b.type==='gap' ? "what nearly pulled you into the phone here?" : "quick note…";
+      ta.value = data.notes[b.id] || '';
+      ta.onblur = async ()=>{
+        data.notes[b.id] = ta.value;
+        await saveDay(ds, data);
+        noteToggle.textContent = ta.value ? 'edit note' : '+ note';
+      };
+      noteHolder.appendChild(ta);
+    }
+    noteToggle.onclick = ()=>{ noteOpen = !noteOpen; paintNote(); };
+    paintNote();
+
+    app.appendChild(block);
+  });
+
+  const noteWrap = document.createElement('div');
+  noteWrap.className = 'daynote-wrap';
+  noteWrap.innerHTML = `
+    <div class="daynote-label">Daily note — what actually happened</div>
+    <textarea class="daynote" placeholder="What got done, what didn't, what you'd do differently tomorrow…">${data.dayNote||''}</textarea>
+    <div class="savetick">saved</div>
+  `;
+  const ta = noteWrap.querySelector('.daynote');
+  const tick = noteWrap.querySelector('.savetick');
+  ta.onblur = async ()=>{
+    data.dayNote = ta.value;
+    await saveDay(ds, data);
+    tick.classList.add('show');
+    setTimeout(()=>tick.classList.remove('show'), 1500);
+  };
+  app.appendChild(noteWrap);
+}
+
+function renderReviewPanel(app){
+  const head = document.createElement('div');
+  head.className = 'panel-head';
+  head.innerHTML = `<div class="panel-title">Weekly Review</div><div class="panel-sub">sun · ${fmtShort(sundayDate)}</div>`;
+  app.appendChild(head);
+
+  const grid = document.createElement('div');
+  grid.className = 'review-grid';
+  const stats = [
+    {id:'primary', label:'DaVinci+IG'},
+    {id:'gym', label:'Gym'},
+    {id:'stockcheck', label:'Market'},
+    {id:'commrep', label:'Comms'},
+  ];
+  stats.forEach(s=>{
+    const el = document.createElement('div');
+    el.className = 'review-stat';
+    el.innerHTML = `<div class="num">${tallyCount(s.id)}/6</div><div class="lbl">${s.label}</div>`;
+    grid.appendChild(el);
+  });
+  app.appendChild(grid);
+
+  const fields = [
+    {key:'igNotes', label:'Instagram page — what shipped this week?', placeholder:'Videos filmed, posted, research done, follower count…'},
+    {key:'reflection', label:'Where did procrastination win this week?', placeholder:'Be specific — which slot, which day, what pulled you away…'},
+    {key:'nextFocus', label:'One thing to fix next week', placeholder:'Just one. Not five.'},
+  ];
+  const tick = document.createElement('div');
+  tick.className = 'savetick';
+  tick.textContent = 'saved';
+
+  fields.forEach(f=>{
+    const wrap = document.createElement('div');
+    wrap.className = 'review-field';
+    wrap.innerHTML = `<label>${f.label}</label><textarea placeholder="${f.placeholder}">${reviewData[f.key]||''}</textarea>`;
+    const ta = wrap.querySelector('textarea');
+    ta.onblur = async ()=>{
+      reviewData[f.key] = ta.value;
+      await saveWeekReview(mondayKey, reviewData);
+      tick.classList.add('show');
+      setTimeout(()=>tick.classList.remove('show'), 1500);
+    };
+    app.appendChild(wrap);
+  });
+  app.appendChild(tick);
+}
+
+init();
+</script>
+</body>
+</html>
