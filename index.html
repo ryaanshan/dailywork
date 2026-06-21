@@ -64,6 +64,31 @@
     color:var(--muted);
     margin-bottom:22px;
   }
+  .weeknav{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    margin-bottom:22px;
+    gap:8px;
+  }
+  .weeknav .dateline{margin-bottom:0;text-align:center;flex:1;}
+  .navbtn{
+    background:var(--surface);
+    border:1px solid var(--border);
+    color:var(--text);
+    font-family:'JetBrains Mono',monospace;
+    font-size:11px;
+    padding:7px 10px;
+    border-radius:7px;
+    cursor:pointer;
+    flex:0 0 auto;
+    white-space:nowrap;
+  }
+  .navbtn:hover{border-color:var(--muted);}
+  .navbtn:disabled{
+    opacity:0.35;
+    cursor:not-allowed;
+  }
 
   /* tally strip */
   .tally{
@@ -410,22 +435,25 @@ function getMonday(d){
 }
 
 const today = new Date();
-const monday = getMonday(today);
-const weekDates = [];
-for(let i=0;i<6;i++){
-  const d = new Date(monday);
-  d.setDate(monday.getDate()+i);
-  weekDates.push(d);
-}
-const sundayDate = new Date(monday);
-sundayDate.setDate(monday.getDate()+6);
 const todayStr = fmtDate(today);
-const mondayKey = fmtDate(monday);
+const realMonday = getMonday(today);
+
+function computeWeek(offset){
+  const m = new Date(realMonday);
+  m.setDate(realMonday.getDate() + offset*7);
+  const dates = [];
+  for(let i=0;i<6;i++){ const d = new Date(m); d.setDate(m.getDate()+i); dates.push(d); }
+  const sunday = new Date(m); sunday.setDate(m.getDate()+6);
+  return {monday:m, dates, sunday};
+}
+
+let weekOffset = 0;
+let view = computeWeek(0);
 
 let weekData = {}; // dateStr -> {checks:{}, notes:{}, dayNote:''}
 let reviewData = {igNotes:'', reflection:'', nextFocus:''};
-let selectedIndex = weekDates.findIndex(d => fmtDate(d) === todayStr);
-if(selectedIndex === -1) selectedIndex = (todayStr === fmtDate(sundayDate)) ? 6 : 0;
+let selectedIndex = view.dates.findIndex(d => fmtDate(d) === todayStr);
+if(selectedIndex === -1) selectedIndex = (todayStr === fmtDate(view.sunday)) ? 6 : 0;
 
 async function loadDay(dateStr){
   try{
@@ -457,7 +485,7 @@ function dayCompletion(dateStr){
 
 function tallyCount(blockId){
   let n = 0;
-  weekDates.forEach(d=>{
+  view.dates.forEach(d=>{
     const ds = fmtDate(d);
     const data = weekData[ds];
     if(data && data.checks && data.checks[blockId]) n++;
@@ -465,11 +493,29 @@ function tallyCount(blockId){
   return n;
 }
 
-async function init(){
-  const loads = weekDates.map(d => loadDay(fmtDate(d)));
+async function loadWeekData(){
+  const loads = view.dates.map(d => loadDay(fmtDate(d)));
   const results = await Promise.all(loads);
-  weekDates.forEach((d,i)=>{ weekData[fmtDate(d)] = results[i]; });
-  reviewData = await loadWeekReview(mondayKey);
+  weekData = {};
+  view.dates.forEach((d,i)=>{ weekData[fmtDate(d)] = results[i]; });
+  reviewData = await loadWeekReview(fmtDate(view.monday));
+}
+
+async function switchWeek(newOffset){
+  if(newOffset > 0) return; // can't view weeks that haven't happened yet
+  weekOffset = newOffset;
+  view = computeWeek(weekOffset);
+  const todayIdx = view.dates.findIndex(d => fmtDate(d) === todayStr);
+  selectedIndex = (weekOffset === 0)
+    ? (todayIdx === -1 ? (todayStr === fmtDate(view.sunday) ? 6 : 0) : todayIdx)
+    : 0;
+  document.getElementById('app').innerHTML = '<div class="loading">loading…</div>';
+  await loadWeekData();
+  render();
+}
+
+async function init(){
+  await loadWeekData();
   render();
 }
 
@@ -482,9 +528,21 @@ function render(){
   header.innerHTML = `
     <div class="eyebrow">the operating system</div>
     <h1>Mon–Sat Execution</h1>
-    <div class="dateline">Week of ${fmtShort(monday)} – ${fmtShort(sundayDate)}</div>
   `;
   app.appendChild(header);
+
+  // week nav
+  const navRow = document.createElement('div');
+  navRow.className = 'weeknav';
+  const isCurrent = weekOffset === 0;
+  navRow.innerHTML = `
+    <button class="navbtn" id="prevWeekBtn">‹ prev week</button>
+    <div class="dateline">Week of ${fmtShort(view.monday)} – ${fmtShort(view.sunday)}${isCurrent ? ' · this week' : ''}</div>
+    <button class="navbtn" id="nextWeekBtn" ${isCurrent ? 'disabled' : ''}>next week ›</button>
+  `;
+  app.appendChild(navRow);
+  navRow.querySelector('#prevWeekBtn').onclick = ()=> switchWeek(weekOffset-1);
+  navRow.querySelector('#nextWeekBtn').onclick = ()=> switchWeek(weekOffset+1);
 
   // tally strip
   const tally = document.createElement('div');
@@ -506,7 +564,7 @@ function render(){
   // day strip
   const strip = document.createElement('div');
   strip.className = 'daystrip';
-  weekDates.forEach((d,i)=>{
+  view.dates.forEach((d,i)=>{
     const ds = fmtDate(d);
     const pct = dayCompletion(ds);
     const plate = document.createElement('div');
@@ -519,15 +577,15 @@ function render(){
   // sunday plate
   const sunPlate = document.createElement('div');
   const sunPct = Math.round((tallyDefs.reduce((a,t)=>a+tallyCount(t.id),0))/(tallyDefs.length*6)*100);
-  sunPlate.className = 'plate is-sun' + (selectedIndex===6?' active':'') + (fmtDate(sundayDate)===todayStr?' is-today':'');
+  sunPlate.className = 'plate is-sun' + (selectedIndex===6?' active':'') + (fmtDate(view.sunday)===todayStr?' is-today':'');
   sunPlate.style.setProperty('--pct', sunPct);
-  sunPlate.innerHTML = `<div class="plate-inner"><div class="plate-day">SUN</div><div class="plate-date">${fmtShort(sundayDate)}</div></div>`;
+  sunPlate.innerHTML = `<div class="plate-inner"><div class="plate-day">SUN</div><div class="plate-date">${fmtShort(view.sunday)}</div></div>`;
   sunPlate.onclick = ()=>{ selectedIndex = 6; render(); };
   strip.appendChild(sunPlate);
   app.appendChild(strip);
 
   if(selectedIndex < 6){
-    renderDayPanel(app, weekDates[selectedIndex]);
+    renderDayPanel(app, view.dates[selectedIndex]);
   } else {
     renderReviewPanel(app);
   }
@@ -539,7 +597,7 @@ function renderDayPanel(app, date){
 
   const head = document.createElement('div');
   head.className = 'panel-head';
-  head.innerHTML = `<div class="panel-title">${DAY_NAMES[weekDates.findIndex(d=>fmtDate(d)===ds)]} · ${fmtShort(date)}</div><div class="panel-sub">${dayCompletion(ds)}% locked in</div>`;
+  head.innerHTML = `<div class="panel-title">${DAY_NAMES[view.dates.findIndex(d=>fmtDate(d)===ds)]} · ${fmtShort(date)}</div><div class="panel-sub">${dayCompletion(ds)}% locked in</div>`;
   app.appendChild(head);
 
   BLOCKS.forEach(b=>{
@@ -616,7 +674,7 @@ function renderDayPanel(app, date){
 function renderReviewPanel(app){
   const head = document.createElement('div');
   head.className = 'panel-head';
-  head.innerHTML = `<div class="panel-title">Weekly Review</div><div class="panel-sub">sun · ${fmtShort(sundayDate)}</div>`;
+  head.innerHTML = `<div class="panel-title">Weekly Review</div><div class="panel-sub">sun · ${fmtShort(view.sunday)}</div>`;
   app.appendChild(head);
 
   const grid = document.createElement('div');
@@ -651,7 +709,7 @@ function renderReviewPanel(app){
     const ta = wrap.querySelector('textarea');
     ta.onblur = async ()=>{
       reviewData[f.key] = ta.value;
-      await saveWeekReview(mondayKey, reviewData);
+      await saveWeekReview(fmtDate(view.monday), reviewData);
       tick.classList.add('show');
       setTimeout(()=>tick.classList.remove('show'), 1500);
     };
